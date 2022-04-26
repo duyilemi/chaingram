@@ -1,32 +1,131 @@
-import React, { Component } from 'react';
-import Web3 from 'web3';
-import Identicon from 'identicon.js';
-import './App.css';
-import Decentragram from '../abis/Decentragram.json'
-import Navbar from './Navbar'
-import Main from './Main'
+import React, { Component } from "react";
+import Web3 from "web3";
+import Identicon from "identicon.js";
+import "./App.css";
+import Chaingram from "../abis/Chaingram.json";
+import Navbar from "./Navbar";
+import Main from "./Main";
 
+//Declare IPFS
+const ipfsClient = require("ipfs-http-client");
+const ipfs = ipfsClient({
+  host: "ipfs.infura.io",
+  port: 5001,
+  protocol: "https",
+}); // leaving out the arguments will default to these values
 
 class App extends Component {
+  async componentWillMount() {
+    await this.loadWeb3();
+    await this.loadBlockchainData();
+  }
 
-  constructor(props) {
-    super(props)
-    this.state = {
-      account: '',
+  async loadWeb3() {
+    if (window.ethereum) {
+      window.web3 = new Web3(window.ethereum);
+      await window.ethereum.enable();
+    } else if (window.web3) {
+      window.web3 = new Web3(window.web3.currentProvider);
+    } else {
+      window.alert("Non-Ethereum browser detected.");
     }
   }
+
+  async loadBlockchainData() {
+    const web3 = window.web3;
+    // load the account
+    const accounts = await web3.eth.getAccounts();
+    this.setState({ account: accounts[0] });
+    // get access to the contract through its abi and address
+    const networkId = await web3.eth.net.getId();
+    const networkData = Chaingram.networks[networkId];
+    if (networkData) {
+      const chaingram = web3.eth.Contract(Chaingram.abi, networkData.address);
+      this.setState({ chaingram: chaingram });
+      const imagesCount = await chaingram.methods.imageCount().call();
+      this.setState({ imagesCount: imagesCount });
+
+      // load images ...
+      for (var i = 0; i <= imagesCount; i++) {
+        const image = await chaingram.methods.images(i).call();
+        this.setState({ images: [...this.state.images, image] });
+
+        this.setState({
+          images: this.state.images.sort((a, b) => b.tipAmount - a.tipAmount),
+        });
+      }
+
+      this.setState({ loading: false });
+    } else {
+      window.alert("Chaingram contract not deployed to detected network ... ");
+    }
+  }
+
+  captureFile = (event) => {
+    event.preventDefault();
+    const file = event.target.files[0];
+    const reader = new window.FileReader();
+    reader.readAsArrayBuffer(file);
+
+    reader.onloadend = () => {
+      this.setState({ buffer: Buffer(reader.result) });
+    };
+  };
+
+  uploadImage = (description) => {
+    //adding file to the IPFS
+    ipfs.add(this.state.buffer, (error, result) => {
+      // console.log("Ipfs result", result);
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      this.setState({ loading: true });
+      this.state.chaingram.methods
+        .uploadImage(result[0].hash, description)
+        .send({ from: this.state.account })
+        .on("transactionHash", (hash) => {
+          this.setState({ loading: false });
+        });
+    });
+  };
+  constructor(props) {
+    super(props);
+    this.state = {
+      account: "",
+      chaingram: null,
+      images: [],
+      loading: true,
+    };
+  }
+
+  tipImageOwner = (id, tipAmount) => {
+    this.setState({ loading: true });
+    this.state.chaingram.methods
+      .tipImageOwner(id)
+      .send({ from: this.state.account, value: tipAmount })
+      .on("transactionHash", (hash) => {
+        this.setState({ loading: false });
+      });
+  };
 
   render() {
     return (
       <div>
         <Navbar account={this.state.account} />
-        { this.state.loading
-          ? <div id="loader" className="text-center mt-5"><p>Loading...</p></div>
-          : <Main
-            // Code...
-            />
-          }
-        }
+        {this.state.loading ? (
+          <div id="loader" className="text-center mt-5">
+            <p>Loading...</p>
+          </div>
+        ) : (
+          <Main
+            captureFile={this.captureFile}
+            uploadImage={this.uploadImage}
+            images={this.state.images}
+            tipImageOwner={this.tipImageOwner}
+          />
+        )}
       </div>
     );
   }
