@@ -1,6 +1,6 @@
 # chaingram
 
-A decentralized app where you can get rewards on the pictures you put up. Uploads pictures in a decentralized way and other users can tip your content with crypto-currency. The name and description are stored on the blockchain directly while the images themselves are stored on IPFS and the reference to those images are stored on the blockchain.
+A decentralized app where you can get rewards on the pictures you put up. Upload pictures in a decentralized way and other users can tip your content with crypto-currency. The name and description are stored on the blockchain directly while the images themselves are stored on IPFS and the reference to those images are stored on the blockchain.
 
 # Tools and Tech Stack
 
